@@ -23,6 +23,16 @@ class _PhotoCardState extends State<PhotoCard> {
     _loadImage();
   }
 
+  @override
+  void didUpdateWidget(covariant PhotoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset.id != widget.asset.id) {
+      _loading = true;
+      _imageBytes = null;
+      _loadImage();
+    }
+  }
+
   Future<void> _loadImage() async {
     final bytes = await GalleryService.getThumbnail(
       widget.asset,

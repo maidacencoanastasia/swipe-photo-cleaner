@@ -368,7 +368,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        PhotoCard(asset: _photos[index]),
+                        PhotoCard(
+                          key: ValueKey(_photos[index].id),
+                          asset: _photos[index],
+                        ),
                         SwipeOverlay(swipeProgress: progress),
                       ],
                     );
