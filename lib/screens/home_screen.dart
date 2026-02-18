@@ -17,6 +17,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<AssetEntity> _photos = [];
   final List<AssetEntity> _toDelete = [];
   int _keptCount = 0;
+  int _totalPhotos = 0;
+  int _swipedCount = 0;
   bool _loading = true;
   bool _permissionDenied = false;
   bool _done = false;
@@ -46,11 +48,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadPhotos() async {
+    final total = await GalleryService.getTotalImageCount();
     final photos = await GalleryService.loadAllImages(
       page: _currentPage,
       pageSize: _pageSize,
     );
     setState(() {
+      _totalPhotos = total;
+      _swipedCount = 0;
       _photos = photos;
       _loading = false;
       _done = photos.isEmpty;
@@ -274,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${_photos.length} photos remaining',
+                    '${(_totalPhotos - _swipedCount).clamp(0, _totalPhotos)} photos remaining',
                     style: TextStyle(
                       fontSize: 13,
                       color: cs.onSurface.withValues(alpha: 0.5),
@@ -432,6 +437,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         // Keep
         _keptCount++;
       }
+      _swipedCount++;
     }
 
     setState(() {

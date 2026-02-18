@@ -34,6 +34,15 @@ class GalleryService {
     return assets;
   }
 
+  /// Get total count of images in gallery.
+  static Future<int> getTotalImageCount() async {
+    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+      type: RequestType.image,
+    );
+    if (albums.isEmpty) return 0;
+    return await albums.first.assetCountAsync;
+  }
+
   /// Load thumbnail bytes for an asset.
   static Future<Uint8List?> getThumbnail(
     AssetEntity asset, {
