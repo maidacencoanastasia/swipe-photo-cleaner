@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _loading = true;
   bool _permissionDenied = false;
   bool _done = false;
+  bool _shuffled = false;
   double _swipeProgress = 0.0;
   int _currentPage = 0;
   bool _loadingMore = false;
@@ -53,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       page: _currentPage,
       pageSize: _pageSize,
     );
+    if (_shuffled) photos.shuffle();
     setState(() {
       _totalPhotos = total;
       _swipedCount = 0;
@@ -60,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _loading = false;
       _done = photos.isEmpty;
     });
+    // Preload first few images
+    if (photos.length > 1) {
+      PhotoCacheManager.preload(photos.take(5).toList());
+    }
   }
 
   Future<void> _loadMorePhotos() async {
@@ -73,9 +79,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (morePhotos.isEmpty) {
       setState(() => _done = true);
     } else {
+      if (_shuffled) morePhotos.shuffle();
       setState(() => _photos = morePhotos);
+      // Preload next batch
+      PhotoCacheManager.preload(morePhotos.take(5).toList());
     }
     _loadingMore = false;
+  }
+
+  void _toggleShuffle() {
+    setState(() {
+      _shuffled = !_shuffled;
+      if (_shuffled) {
+        _photos.shuffle();
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _shuffled
+              ? 'Shuffle ON — random order'
+              : 'Shuffle OFF — newest first',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Future<void> _confirmAndDelete() async {
@@ -121,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _restart() {
+    PhotoCacheManager.clear();
     setState(() {
       _toDelete.clear();
       _keptCount = 0;
@@ -287,23 +318,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-              if (_toDelete.isNotEmpty)
-                FilledButton.tonal(
-                  onPressed: _confirmAndDelete,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _toggleShuffle,
+                    icon: Icon(
+                      Icons.shuffle_rounded,
+                      color: _shuffled
+                          ? cs.primary
+                          : cs.onSurface.withValues(alpha: 0.4),
                     ),
+                    tooltip: 'Shuffle',
                   ),
-                  child: Text(
-                    'Delete ${_toDelete.length}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                  if (_toDelete.isNotEmpty)
+                    FilledButton.tonal(
+                      onPressed: _confirmAndDelete,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: Text(
+                        'Delete ${_toDelete.length}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                ],
+              ),
             ],
           ),
         ),
@@ -343,6 +389,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               numberOfCardsDisplayed: _photos.length >= 3 ? 3 : _photos.length,
               backCardOffset: const Offset(0, -30),
               scale: 0.92,
+              duration: const Duration(milliseconds: 200),
+              threshold: 50,
               padding: const EdgeInsets.only(bottom: 16, top: 4),
               allowedSwipeDirection: const AllowedSwipeDirection.symmetric(
                 horizontal: true,
@@ -443,6 +491,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _swipeProgress = 0.0;
     });
+
+    // Preload upcoming images
+    if (currentIndex != null && currentIndex < _photos.length) {
+      final preloadEnd = (currentIndex + 5).clamp(0, _photos.length);
+      PhotoCacheManager.preload(_photos.sublist(currentIndex, preloadEnd));
+    }
 
     return true;
   }
