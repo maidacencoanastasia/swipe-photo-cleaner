@@ -2,6 +2,12 @@
 
 A minimalistic Android app built with Flutter to clean your photo gallery by swiping.
 
+## Screenshots
+
+| Swipe UI | Keep / Delete | Done Screen |
+|----------|--------------|-------------|
+| ![Screen 1](photo_1.jpg) | ![Screen 2](photo_2.jpg) | ![Screen 3](photo_3.jpg) |
+
 ## How It Works
 
 - **Swipe right** → Keep the photo
