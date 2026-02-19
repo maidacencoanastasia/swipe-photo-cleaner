@@ -493,10 +493,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const SizedBox(width: 16),
               _StatChip(
-                icon: Icons.favorite_rounded,
-                label: '$_keptCount',
-                color: Colors.green,
+                icon: Icons.delete_rounded,
+                label: '${_toDelete.length}',
+                color: Colors.red,
               ),
               const SizedBox(width: 16),
               _StatChip(
@@ -507,9 +508,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 16),
               _StatChip(
-                icon: Icons.delete_rounded,
-                label: '${_toDelete.length}',
-                color: Colors.red,
+                icon: Icons.favorite_rounded,
+                label: '$_keptCount',
+                color: Colors.green,
               ),
             ],
           ),
