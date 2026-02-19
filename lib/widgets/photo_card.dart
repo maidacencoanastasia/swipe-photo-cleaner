@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../services/gallery_service.dart';
@@ -109,28 +110,56 @@ class _PhotoCardState extends State<PhotoCard> {
         borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            color: Colors.black,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
+                color: Colors.black.withValues(alpha: 0.12),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
           child: _loading
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+              ? Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                )
               : _imageBytes != null
-              ? Image.memory(
-                  _imageBytes!,
-                  fit: widget.fit,
-                  width: double.infinity,
-                  height: double.infinity,
-                  gaplessPlayback: true,
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Blurred + dimmed background to fill letterbox areas
+                    ImageFiltered(
+                      imageFilter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Image.memory(
+                        _imageBytes!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                    // Dark tint over blur
+                    Container(color: Colors.black.withValues(alpha: 0.35)),
+                    // Full image, no cropping
+                    Image.memory(
+                      _imageBytes!,
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      height: double.infinity,
+                      gaplessPlayback: true,
+                    ),
+                  ],
                 )
               : const Center(
-                  child: Icon(Icons.broken_image_outlined, size: 48),
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    size: 48,
+                    color: Colors.white54,
+                  ),
                 ),
         ),
       ),
