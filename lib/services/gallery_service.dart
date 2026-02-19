@@ -8,12 +8,9 @@ class GalleryService {
     return ps.isAuth || ps == PermissionState.limited;
   }
 
-  /// Load all images from device gallery, sorted by date descending.
-  static Future<List<AssetEntity>> loadAllImages({
-    int page = 0,
-    int pageSize = 50,
-  }) async {
-    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+  /// Return all albums that contain images.
+  static Future<List<AssetPathEntity>> getAlbums() async {
+    return await PhotoManager.getAssetPathList(
       type: RequestType.image,
       filterOption: FilterOptionGroup(
         orders: [
@@ -21,26 +18,20 @@ class GalleryService {
         ],
       ),
     );
-
-    if (albums.isEmpty) return [];
-
-    // Use the "Recent" / all-photos album (first one)
-    final AssetPathEntity recentAlbum = albums.first;
-    final List<AssetEntity> assets = await recentAlbum.getAssetListPaged(
-      page: page,
-      size: pageSize,
-    );
-
-    return assets;
   }
 
-  /// Get total count of images in gallery.
-  static Future<int> getTotalImageCount() async {
-    final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
-      type: RequestType.image,
-    );
-    if (albums.isEmpty) return 0;
-    return await albums.first.assetCountAsync;
+  /// Load images from [album] (or the first album if null), paged.
+  static Future<List<AssetEntity>> loadAllImages({
+    required AssetPathEntity album,
+    int page = 0,
+    int pageSize = 50,
+  }) async {
+    return await album.getAssetListPaged(page: page, size: pageSize);
+  }
+
+  /// Get total image count for [album].
+  static Future<int> getTotalImageCount(AssetPathEntity album) async {
+    return await album.assetCountAsync;
   }
 
   /// Load thumbnail bytes for an asset.

@@ -26,7 +26,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _swipeProgress = 0.0;
   int _currentPage = 0;
   bool _loadingMore = false;
+  int _swiperRebuildKey = 0; // increment to force CardSwiper rebuild
   static const int _pageSize = 50;
+
+  // Albums
+  List<AssetPathEntity> _albums = [];
+  AssetPathEntity? _selectedAlbum;
 
   final CardSwiperController _swiperController = CardSwiperController();
 
@@ -45,12 +50,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
       return;
     }
+    final albums = await GalleryService.getAlbums();
+    if (albums.isEmpty) {
+      setState(() {
+        _loading = false;
+        _done = true;
+      });
+      return;
+    }
+    _albums = albums;
+    _selectedAlbum = albums.first;
     await _loadPhotos();
   }
 
   Future<void> _loadPhotos() async {
-    final total = await GalleryService.getTotalImageCount();
+    if (_selectedAlbum == null) return;
+    final total = await GalleryService.getTotalImageCount(_selectedAlbum!);
     final photos = await GalleryService.loadAllImages(
+      album: _selectedAlbum!,
       page: _currentPage,
       pageSize: _pageSize,
     );
@@ -61,18 +78,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _photos = photos;
       _loading = false;
       _done = photos.isEmpty;
+      _swiperRebuildKey++;
     });
-    // Preload first few images
     if (photos.length > 1) {
       PhotoCacheManager.preload(photos.take(5).toList());
     }
   }
 
   Future<void> _loadMorePhotos() async {
-    if (_loadingMore) return;
+    if (_loadingMore || _selectedAlbum == null) return;
     _loadingMore = true;
     _currentPage++;
     final morePhotos = await GalleryService.loadAllImages(
+      album: _selectedAlbum!,
       page: _currentPage,
       pageSize: _pageSize,
     );
@@ -80,8 +98,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() => _done = true);
     } else {
       if (_shuffled) morePhotos.shuffle();
-      setState(() => _photos = morePhotos);
-      // Preload next batch
+      setState(() {
+        _photos = morePhotos;
+        _swiperRebuildKey++;
+      });
       PhotoCacheManager.preload(morePhotos.take(5).toList());
     }
     _loadingMore = false;
@@ -91,19 +111,113 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _shuffled = !_shuffled;
       if (_shuffled) {
-        _photos.shuffle();
+        _photos = List.from(_photos)..shuffle();
+        _swiperRebuildKey++;
       }
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          _shuffled
-              ? 'Shuffle ON — random order'
-              : 'Shuffle OFF — newest first',
-        ),
+        content: Text(_shuffled ? 'Shuffled!' : 'Back to original order'),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _showAlbumPicker() async {
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Select Album',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...(_albums.map(
+              (album) => FutureBuilder<int>(
+                future: album.assetCountAsync,
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  final isSelected = album.id == _selectedAlbum?.id;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      album.isAll
+                          ? Icons.photo_library_rounded
+                          : Icons.folder_rounded,
+                      color: isSelected
+                          ? cs.primary
+                          : cs.onSurface.withValues(alpha: 0.5),
+                    ),
+                    title: Text(
+                      album.name,
+                      style: TextStyle(
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        color: isSelected ? cs.primary : cs.onSurface,
+                      ),
+                    ),
+                    subtitle: count > 0
+                        ? Text(
+                            '$count photos',
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                          )
+                        : null,
+                    trailing: isSelected
+                        ? Icon(Icons.check_rounded, color: cs.primary)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      if (album.id != _selectedAlbum?.id) {
+                        _selectedAlbum = album;
+                        PhotoCacheManager.clear();
+                        setState(() {
+                          _loading = true;
+                          _currentPage = 0;
+                          _keptCount = 0;
+                          _swipedCount = 0;
+                          _toDelete.clear();
+                          _done = false;
+                          _shuffled = false;
+                        });
+                        _loadPhotos();
+                      }
+                    },
+                  );
+                },
+              ),
+            )),
+          ],
+        ),
       ),
     );
   }
@@ -155,9 +269,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _toDelete.clear();
       _keptCount = 0;
+      _swipedCount = 0;
       _currentPage = 0;
       _loading = true;
       _done = false;
+      _shuffled = false;
     });
     _loadPhotos();
   }
@@ -309,11 +425,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    '${(_totalPhotos - _swipedCount).clamp(0, _totalPhotos)} photos remaining',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: cs.onSurface.withValues(alpha: 0.5),
+                  GestureDetector(
+                    onTap: _showAlbumPicker,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _selectedAlbum?.name ?? 'All Photos',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.expand_more_rounded,
+                          size: 16,
+                          color: cs.primary,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -367,7 +498,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 label: '$_keptCount',
                 color: Colors.green,
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
+              _StatChip(
+                icon: Icons.photo_outlined,
+                label:
+                    '${(_totalPhotos - _swipedCount).clamp(0, _totalPhotos)}',
+                color: Colors.blue,
+              ),
+              const SizedBox(width: 16),
               _StatChip(
                 icon: Icons.delete_rounded,
                 label: '${_toDelete.length}',
@@ -384,6 +522,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: CardSwiper(
+              key: ValueKey(_swiperRebuildKey),
               controller: _swiperController,
               cardsCount: _photos.length,
               numberOfCardsDisplayed: _photos.length >= 3 ? 3 : _photos.length,
