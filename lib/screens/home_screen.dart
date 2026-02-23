@@ -129,93 +129,115 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final cs = Theme.of(context).colorScheme;
     await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (ctx, scrollController) => Column(
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Select Album',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...(_albums.map(
-              (album) => FutureBuilder<int>(
-                future: album.assetCountAsync,
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  final isSelected = album.id == _selectedAlbum?.id;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      album.isAll
-                          ? Icons.photo_library_rounded
-                          : Icons.folder_rounded,
-                      color: isSelected
-                          ? cs.primary
-                          : cs.onSurface.withValues(alpha: 0.5),
-                    ),
-                    title: Text(
-                      album.name,
-                      style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        color: isSelected ? cs.primary : cs.onSurface,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    subtitle: count > 0
-                        ? Text(
-                            '$count photos',
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.5),
-                              fontSize: 12,
-                            ),
-                          )
-                        : null,
-                    trailing: isSelected
-                        ? Icon(Icons.check_rounded, color: cs.primary)
-                        : null,
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      if (album.id != _selectedAlbum?.id) {
-                        _selectedAlbum = album;
-                        PhotoCacheManager.clear();
-                        setState(() {
-                          _loading = true;
-                          _currentPage = 0;
-                          _keptCount = 0;
-                          _swipedCount = 0;
-                          _toDelete.clear();
-                          _done = false;
-                          _shuffled = false;
-                        });
-                        _loadPhotos();
-                      }
-                    },
-                  );
-                },
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Select Album',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ),
-            )),
+            ),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                children: _albums
+                    .map(
+                      (album) => FutureBuilder<int>(
+                        future: album.assetCountAsync,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          final isSelected = album.id == _selectedAlbum?.id;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              album.isAll
+                                  ? Icons.photo_library_rounded
+                                  : Icons.folder_rounded,
+                              color: isSelected
+                                  ? cs.primary
+                                  : cs.onSurface.withValues(alpha: 0.5),
+                            ),
+                            title: Text(
+                              album.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: isSelected ? cs.primary : cs.onSurface,
+                              ),
+                            ),
+                            subtitle: count > 0
+                                ? Text(
+                                    '$count photos',
+                                    style: TextStyle(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                : null,
+                            trailing: isSelected
+                                ? Icon(Icons.check_rounded, color: cs.primary)
+                                : null,
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              if (album.id != _selectedAlbum?.id) {
+                                _selectedAlbum = album;
+                                PhotoCacheManager.clear();
+                                setState(() {
+                                  _loading = true;
+                                  _currentPage = 0;
+                                  _keptCount = 0;
+                                  _swipedCount = 0;
+                                  _toDelete.clear();
+                                  _done = false;
+                                  _shuffled = false;
+                                });
+                                _loadPhotos();
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
           ],
         ),
       ),
@@ -248,19 +270,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
 
     if (confirmed == true) {
+      final deletedCount = _toDelete.length;
       await GalleryService.deleteAssets(_toDelete);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_toDelete.length} photo(s) deleted'),
+            content: Text('$deletedCount photo(s) deleted'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
+        setState(() {
+          _toDelete.clear();
+          _keptCount = 0;
+          _swipedCount = 0;
+          _currentPage = 0;
+          _loading = true;
+          _done = false;
+          _shuffled = false;
+        });
+        _loadPhotos();
       }
-      _toDelete.clear();
     }
   }
 
